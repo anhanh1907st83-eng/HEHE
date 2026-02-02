@@ -9,7 +9,7 @@ st.set_page_config(page_title="True or Dare Pro", page_icon="🔥")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. Đọc dữ liệu (Thêm ttl=0 để luôn làm mới dữ liệu khi load trang)
-url = "LINK_GOOGLE_SHEET_CỦA_BẠN"
+url = "https://docs.google.com/spreadsheets/d/1lknKFA9Ekg3OAfTjQ60ckgYVZwKLPLvJW-cpaxBPq2w/edit?usp=sharing"
 
 try:
     df = conn.read(spreadsheet=url, ttl=0)

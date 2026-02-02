@@ -29,7 +29,7 @@ data = {
 st.set_page_config(page_title="Hôm nay ăn gì?", page_icon="🍲")
 
 st.title("🍲 App: Hôm nay ăn gì?")
-st.write("Dựa trên thực đơn 'Bộ bài Tây' của bạn!")
+st.write("Dựa trên thực đơn của bạn!")
 
 # Lựa chọn thể loại
 category = st.selectbox("Bạn đang thèm kiểu gì?", ["Tất cả"] + list(data.keys()))

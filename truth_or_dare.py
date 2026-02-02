@@ -10,9 +10,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # ttl=0 để lấy dữ liệu mới nhất
+        # ttl=0 để lấy dữ liệu mới nhất ngay lập tức
         df = conn.read(ttl=0)
-        # Làm sạch tên cột: bỏ khoảng trắng và viết thường
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
     except:
@@ -20,46 +19,37 @@ def get_data():
 
 df = get_data()
 
-# --- XỬ LÝ SỐ LIỆU ---
-# Lấy tổng số lượng từ cột 'all' (dòng cuối cùng có chứa số)
-if not df.empty and 'all' in df.columns:
-    # Lấy giá trị lớn nhất trong cột 'all' hoặc đếm số dòng
-    total_cards = len(df)
-else:
-    total_cards = 0
-
 st.title("🎲 Sự Thật hay Thử Thách")
-
-# Hiển thị tổng số lá bài bằng widget metric cho đẹp
-st.metric(label="Tổng số lá bài trong kho", value=f"{total_cards} thẻ")
 
 # --- PHẦN 1: XOAY THẺ (BỊ KHÓA BỞI MÃ) ---
 st.subheader("🔓 Khu vực xoay thẻ")
-code_input = st.text_input("Nhập mã để mở chức năng xoay:", type="password", placeholder="Nhập mã...")
+# Ô nhập mã nằm ngay trên nút xoay để dễ thấy
+code_input = st.text_input("Nhập mã để mở chức năng xoay:", type="password", placeholder="Nhập mã tại đây...")
 
 if code_input == "hihihi":
     if st.button("🎁 MỞ THẺ BÀI NGẪU NHIÊN", use_container_width=True):
         if not df.empty and 'content' in df.columns:
             row = df.sample(n=1).iloc[0]
             q_text = row['content']
-            # Kiểm tra cột type để hiển thị màu sắc
-            q_type = str(row['type']).lower() if 'type' in df.columns else ""
+            q_type = str(row['type']).lower()
             
-            if 'sự thật' in q_type:
+            if q_type == 'sự thật':
                 st.info(f"✨ **SỰ THẬT:** \n\n {q_text}")
-            elif 'thử thách' in q_type:
-                st.error(f"🔥 **THỬ THÁCH:** \n\n {q_text}")
             else:
-                st.success(f"🃏 **NỘI DUNG:** \n\n {q_text}")
+                st.error(f"🔥 **THỬ THÁCH:** \n\n {q_text}")
         else:
-            st.warning("Kho bài đang trống!")
+            st.warning("Sheet hiện đang trống, hãy đóng góp câu hỏi ở phía dưới!")
 else:
-    st.button("🎁 Mở thẻ bài (Đang bị khóa)", disabled=True, use_container_width=True)
+    # Trạng thái khi chưa nhập mã hoặc nhập sai
+    st.lock_button = st.button("🎁 Mở thẻ bài (Đang bị khóa)", disabled=True, use_container_width=True)
+    if code_input != "":
+        st.toast("Sai mã rồi bạn ơi! 🤫", icon="❌")
 
 st.divider()
 
-# --- PHẦN 2: THÊM CÂU HỎI ---
+# --- PHẦN 2: THÊM CÂU HỎI (LUÔN MỞ) ---
 st.subheader("➕ Đóng góp câu hỏi mới")
+st.write("Mọi người đều có thể thêm câu hỏi mà không cần mã!")
 
 with st.form("add_question_form", clear_on_submit=True):
     new_c = st.text_input("Nội dung câu hỏi:")
@@ -68,23 +58,14 @@ with st.form("add_question_form", clear_on_submit=True):
 
     if submit:
         if new_c:
-            # Tự động tính số thứ tự mới cho cột 'all'
-            new_all_value = total_cards + 1
-            
-            new_row = pd.DataFrame([{
-                "content": new_c, 
-                "type": new_t, 
-                "all": new_all_value
-            }])
-            
+            new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
+            # Gộp dữ liệu mới vào dữ liệu hiện tại
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            
             try:
                 conn.update(data=updated_df)
-                st.success(f"Đã thêm thành công lá bài số {new_all_value}!")
+                st.success("Đã lưu thành công! Cảm ơn bạn đã đóng góp.")
                 st.balloons()
-                st.rerun() # Refresh để cập nhật con số hiển thị ngay lập tức
             except Exception as e:
-                st.error(f"Lỗi: {e}")
+                st.error(f"Lỗi ghi dữ liệu: {e}")
         else:
-            st.warning("Vui lòng nhập nội dung.")
+            st.warning("Vui lòng không để trống nội dung.")

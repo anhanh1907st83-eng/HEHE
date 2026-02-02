@@ -1,34 +1,49 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import random
+import pandas as pd
 
 st.set_page_config(page_title="True or Dare Pro", page_icon="🔥")
 
-# 1. Khởi tạo kết nối với Google Sheet
+# 1. Khởi tạo kết nối
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. Đọc dữ liệu từ Sheet
-# Thay đổi URL này bằng link Google Sheet của bạn
-url = "https://docs.google.com/spreadsheets/d/1lknKFA9Ekg3OAfTjQ60ckgYVZwKLPLvJW-cpaxBPq2w/edit#gid=0"
-df = conn.read(spreadsheet=url, usecols=[0, 1])
+# 2. Đọc dữ liệu (Thêm ttl=0 để luôn làm mới dữ liệu khi load trang)
+url = "LINK_GOOGLE_SHEET_CỦA_BẠN"
 
-st.title("🃏 True or Dare - GSheets Edition")
+try:
+    df = conn.read(spreadsheet=url, ttl=0)
+    
+    # Ép kiểu tên cột về chữ thường để tránh lỗi viết hoa/thường
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    
+    # Lấy danh sách dựa trên cột 'content' và 'type'
+    # Lưu ý: Sửa tên 'sự thật' và 'thử thách' cho khớp với Sheet của bạn
+    truths = df[df['type'].str.lower() == 'sự thật']['content'].tolist() if 'type' in df.columns else []
+    dares = df[df['type'].str.lower() == 'thử thách']['content'].tolist() if 'type' in df.columns else []
 
-# Chia dữ liệu theo loại
-truths = df[df['type'] == 'Sự thật']['content'].tolist()
-dares = df[df['type'] == 'Thử thách']['content'].tolist()
+except Exception as e:
+    st.error(f"Lỗi kết nối dữ liệu: {e}")
+    truths, dares = [], []
 
-# 3. Giao diện nút bấm
+st.title("🃏 True or Dare")
+
 col1, col2 = st.columns(2)
+
 with col1:
     if st.button("✨ Sự Thật"):
-        st.info(random.choice(truths))
+        if truths: # Kiểm tra nếu danh sách không rỗng
+            st.info(random.choice(truths))
+        else:
+            st.warning("Kho 'Sự thật' đang trống! Hãy kiểm tra Google Sheet.")
 
 with col2:
     if st.button("🔥 Thử Thách"):
-        st.error(random.choice(dares))
+        if dares: # Kiểm tra nếu danh sách không rỗng
+            st.error(random.choice(dares))
+        else:
+            st.warning("Kho 'Thử thách' đang trống! Hãy thêm dữ liệu.")
 
-st.divider()
-
-# 4. Thêm dữ liệu (Hướng dẫn)
-st.info("💡 Để thêm câu hỏi mới vĩnh viễn, bạn chỉ cần mở file Google Sheet và nhập thêm dòng mới. App sẽ tự cập nhật khi bạn Refresh trình duyệt!")
+# Hiển thị bảng dữ liệu bên dưới để debug (Chỉ bạn mới thấy)
+with st.expander("🔍 Kiểm tra dữ liệu nguồn"):
+    st.write(df)

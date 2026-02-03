@@ -15,20 +15,32 @@ def get_data():
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
     except:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=['content', 'type'])
 
 df = get_data()
 
+# --- TÍNH TOÁN THỐNG KÊ ---
+total_questions = len(df)
+truth_count = len(df[df['type'].str.lower() == 'sự thật']) if not df.empty else 0
+dare_count = len(df[df['type'].str.lower() == 'thử thách']) if not df.empty else 0
+
 st.title("🎲 Sự Thật hay Thử Thách")
+
+# --- HIỂN THỊ TỔNG SỐ CÂU ---
+col_st1, col_st2, col_st3 = st.columns(3)
+col_st1.metric("Tổng số câu", total_questions)
+col_st2.metric("Sự thật ✨", truth_count)
+col_st3.metric("Thử thách 🔥", dare_count)
+
+st.divider()
 
 # --- PHẦN 1: XOAY THẺ (BỊ KHÓA BỞI MÃ) ---
 st.subheader("🔓 Khu vực xoay thẻ")
-# Ô nhập mã nằm ngay trên nút xoay để dễ thấy
 code_input = st.text_input("Nhập mã để mở chức năng xoay:", type="password", placeholder="Nhập mã tại đây...")
 
 if code_input == "hihihi":
     if st.button("🎁 MỞ THẺ BÀI NGẪU NHIÊN", use_container_width=True):
-        if not df.empty and 'content' in df.columns:
+        if not df.empty:
             row = df.sample(n=1).iloc[0]
             q_text = row['content']
             q_type = str(row['type']).lower()
@@ -38,10 +50,9 @@ if code_input == "hihihi":
             else:
                 st.error(f"🔥 **THỬ THÁCH:** \n\n {q_text}")
         else:
-            st.warning("Sheet hiện đang trống, hãy đóng góp câu hỏi ở phía dưới!")
+            st.warning("Kho bài đang trống!")
 else:
-    # Trạng thái khi chưa nhập mã hoặc nhập sai
-    st.lock_button = st.button("🎁 Mở thẻ bài (Đang bị khóa)", disabled=True, use_container_width=True)
+    st.button("🎁 Mở thẻ bài (Đang bị khóa)", disabled=True, use_container_width=True)
     if code_input != "":
         st.toast("Sai mã rồi bạn ơi! 🤫", icon="❌")
 
@@ -49,8 +60,6 @@ st.divider()
 
 # --- PHẦN 2: THÊM CÂU HỎI (LUÔN MỞ) ---
 st.subheader("➕ Đóng góp câu hỏi mới")
-st.write("Mọi người đều có thể thêm câu hỏi mà không cần mã!")
-
 with st.form("add_question_form", clear_on_submit=True):
     new_c = st.text_input("Nội dung câu hỏi:")
     new_t = st.selectbox("Loại thẻ:", ["Sự thật", "Thử thách"])
@@ -59,13 +68,14 @@ with st.form("add_question_form", clear_on_submit=True):
     if submit:
         if new_c:
             new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
-            # Gộp dữ liệu mới vào dữ liệu hiện tại
             updated_df = pd.concat([df, new_row], ignore_index=True)
             try:
                 conn.update(data=updated_df)
-                st.success("Đã lưu thành công! Cảm ơn bạn đã đóng góp.")
+                st.success("Đã lưu thành công!")
                 st.balloons()
+                # Tự động refresh nhẹ để cập nhật con số thống kê ngay lập tức
+                st.rerun()
             except Exception as e:
                 st.error(f"Lỗi ghi dữ liệu: {e}")
         else:
-            st.warning("Vui lòng không để trống nội dung.")
+            st.warning("Vui lòng nhập nội dung.")

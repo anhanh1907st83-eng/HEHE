@@ -54,6 +54,7 @@ st.divider()
 
 # --- PHẦN 2: THÊM CÂU HỎI ---
 st.subheader("➕ Đóng góp nội dung")
+st.write("Nhập theo cấu trúc nếu không làm được hoặc nói sai sự thật thì kèm theo hình phạt")
 with st.form("add_form", clear_on_submit=True):
     c = st.text_input("Nội dung:")
     t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])

@@ -2,15 +2,23 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import random
+from PIL import Image
 
-st.set_page_config(page_title="Truth or Dare Private", page_icon="🎲")
+st.set_page_config(page_title="Truth or Dare - Team", page_icon="🎲", layout="centered")
+
+# --- HIỂN THỊ HÌNH ẢNH NHÓM ---
+# Cách 1: Hiển thị ở đầu trang như một Banner kỷ niệm
+try:
+    img = Image.open("background.jpg")
+    st.image(img, use_container_width=True, caption="Kỷ niệm chúng mình ❤️")
+except:
+    st.warning("Hãy tải file ảnh lên GitHub với tên 'background.jpg' để hiển thị banner!")
 
 # --- KẾT NỐI DỮ LIỆU ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # ttl=0 để lấy dữ liệu mới nhất ngay lập tức
         df = conn.read(ttl=0)
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
@@ -19,63 +27,49 @@ def get_data():
 
 df = get_data()
 
-# --- TÍNH TOÁN THỐNG KÊ ---
-total_questions = len(df)
-truth_count = len(df[df['type'].str.lower() == 'sự thật']) if not df.empty else 0
-dare_count = len(df[df['type'].str.lower() == 'thử thách']) if not df.empty else 0
+# Thống kê
+total_q = len(df)
 
-st.title("🎲 Sự Thật hay Thử Thách")
-
-# --- HIỂN THỊ TỔNG SỐ CÂU ---
-col_st1, col_st2, col_st3 = st.columns(3)
-col_st1.metric("Tổng số câu", total_questions)
-col_st2.metric("Sự thật ✨", truth_count)
-col_st3.metric("Thử thách 🔥", dare_count)
+st.title("🎲 Truth or Dare Private")
+st.write(f"🔥 Hiện đang có **{total_q}** thử thách trong kho bài!")
 
 st.divider()
 
-# --- PHẦN 1: XOAY THẺ (BỊ KHÓA BỞI MÃ) ---
+# --- PHẦN 1: XOAY THẺ (BỊ KHÓA) ---
 st.subheader("🔓 Khu vực xoay thẻ")
-code_input = st.text_input("Nhập mã để mở chức năng xoay:", type="password", placeholder="Nhập mã tại đây...")
+code_input = st.text_input("Nhập mã bí mật:", type="password")
 
 if code_input == "hihihi":
-    if st.button("🎁 MỞ THẺ BÀI NGẪU NHIÊN", use_container_width=True):
+    if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
         if not df.empty:
             row = df.sample(n=1).iloc[0]
-            q_text = row['content']
-            q_type = str(row['type']).lower()
-            
-            if q_type == 'sự thật':
-                st.info(f"✨ **SỰ THẬT:** \n\n {q_text}")
+            if str(row['type']).lower() == 'sự thật':
+                st.info(f"✨ **TRUTH:** \n\n {row['content']}")
             else:
-                st.error(f"🔥 **THỬ THÁCH:** \n\n {q_text}")
-        else:
-            st.warning("Kho bài đang trống!")
+                st.error(f"🔥 **DARE:** \n\n {row['content']}")
 else:
-    st.button("🎁 Mở thẻ bài (Đang bị khóa)", disabled=True, use_container_width=True)
-    if code_input != "":
-        st.toast("Sai mã rồi bạn ơi! 🤫", icon="❌")
+    st.button("🎁 Mở thẻ bài (Cần nhập mã)", disabled=True, use_container_width=True)
 
 st.divider()
 
-# --- PHẦN 2: THÊM CÂU HỎI (LUÔN MỞ) ---
-st.subheader("➕ Đóng góp câu hỏi mới")
-with st.form("add_question_form", clear_on_submit=True):
-    new_c = st.text_input("Nội dung câu hỏi:")
-    new_t = st.selectbox("Loại thẻ:", ["Sự thật", "Thử thách"])
-    submit = st.form_submit_button("Lưu vĩnh viễn vào kho bài")
-
-    if submit:
-        if new_c:
-            new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
+# --- PHẦN 2: THÊM CÂU HỎI ---
+st.subheader("➕ Đóng góp nội dung")
+with st.form("add_form", clear_on_submit=True):
+    c = st.text_input("Nội dung:")
+    t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])
+    if st.form_submit_button("Lưu vĩnh viễn"):
+        if c:
+            new_row = pd.DataFrame([{"content": c, "type": t}])
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            try:
-                conn.update(data=updated_df)
-                st.success("Đã lưu thành công!")
-                st.balloons()
-                # Tự động refresh nhẹ để cập nhật con số thống kê ngay lập tức
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi ghi dữ liệu: {e}")
-        else:
-            st.warning("Vui lòng nhập nội dung.")
+            conn.update(data=updated_df)
+            st.success("Đã thêm! Hệ thống đang cập nhật...")
+            st.rerun()
+
+# --- HIỂN THỊ HÌNH ẢNH Ở THANH BÊN (TÙY CHỌN) ---
+with st.sidebar:
+    st.header("GƯƠNG MẶT THÂN QUEN")
+    try:
+        st.image("background.jpg")
+    except:
+        pass
+    st.write("App này dành riêng cho hội bạn thân. Chơi vui vẻ nhé!")

@@ -24,7 +24,7 @@ with st.sidebar:
     st.header("👥 THÀNH VIÊN")
     # Bạn có thể sửa danh sách tên ở đây
     team_members = st.text_area("Nhập tên các thành viên (cách nhau bằng dấu phẩy):", 
-                                "An, Bình, Chi, Dũng, Hoa, Tuấn").split(",")
+                                "Tuấn Anh, Dương Ngọc, Nhựt Thành, Ngọc My, Như Ý (nhỏ), Như Ý (bự), Ngọc My, Diễm Trang").split(",")
     team_members = [name.strip() for name in team_members if name.strip()]
     
     st.divider()

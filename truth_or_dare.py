@@ -9,97 +9,95 @@ import time
 # 1. Cấu hình trang
 st.set_page_config(page_title="Truth or Dare - Team", page_icon="🎲", layout="centered")
 
-# Hàm tạo hiệu ứng ngẫu nhiên
+# Hàm tạo hiệu ứng ngẫu nhiên (Thêm nhiều lựa chọn hơn)
 def random_effect():
-    effect = random.choice(["balloons", "snow", "toast"])
-    if effect == "balloons":
+    # Chọn ngẫu nhiên giữa bong bóng, tuyết, và các hiệu ứng toast
+    eff_type = random.choice(["balloons", "snow", "toast"])
+    if eff_type == "balloons":
         st.balloons()
-    elif effect == "snow":
+    elif eff_type == "snow":
         st.snow()
     else:
-        st.toast("🔥 Tới công chuyện luôn!", icon="🎯")
+        st.toast("🔥 Quá cháy luôn!", icon="🎉")
 
 # --- 2. THANH BÊN (SIDEBAR) ---
 with st.sidebar:
-    st.header("👥 THÀNH VIÊN")
-    # Bạn có thể sửa danh sách tên ở đây
-    team_members = st.text_area("Nhập tên các thành viên (cách nhau bằng dấu phẩy):", 
-                                "Tuấn Anh, Dương Ngọc, Nhựt Thành, Ngọc My, Như Ý (nhỏ), Như Ý (bự), Ngọc My, Diễm Trang").split(",")
-    team_members = [name.strip() for name in team_members if name.strip()]
-    
-    st.divider()
+    st.header("📸 NHÓM CHÚNG MÌNH")
     if os.path.exists("background.jpg"):
         st.image("background.jpg")
-    st.write("Chúc nhóm mình chơi vui vẻ! ❤️")
+    else:
+        st.info("Hãy tải 'background.jpg' lên cùng thư mục code!")
+    st.divider()
+    st.write("🎮 **Luật chơi:** Đã chọn là phải làm, không được huỷ!")
 
-# --- 3. KẾT NỐI DỮ LIỆU ---
+# --- 3. BANNER CHÍNH ---
+try:
+    img = Image.open("background.jpg")
+    st.image(img, use_container_width=True)
+except:
+    st.info("💡 Mẹo: Thêm ảnh background.jpg để app đẹp hơn.")
+
+# --- 4. KẾT NỐI DỮ LIỆU ---
 conn = st.connection("gsheets", type=GSheetsConnection)
+
 def get_data():
     try:
-        df = conn.read(ttl="1m")
+        # Đọc dữ liệu từ Google Sheets
+        df = conn.read(ttl="1m") # Cache trong 1 phút để tránh load lại quá nhiều
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
-    except:
+    except Exception as e:
+        st.error(f"Lỗi kết nối: {e}")
         return pd.DataFrame(columns=['content', 'type'])
 
 df = get_data()
 
-# --- 4. GIAO DIỆN CHÍNH ---
-st.title("🎲 Truth or Dare & Lucky Spin")
+st.title("🎲 Truth or Dare Private")
+st.caption(f"Kho bài hiện tại: {len(df)} câu hỏi")
+st.divider()
 
-# Tab để phân chia giữa bốc bài và vòng quay
-tab1, tab2 = st.tabs(["🎁 Bốc Bài", "🎡 Vòng Quay May Mắn"])
+# --- 5. KHU VỰC CHƠI ---
+st.subheader("🔓 Khu vực xoay thẻ")
+code_input = st.text_input("🔑 Nhập mã bí mật để mở khóa:", type="password")
 
-# --- TAB 1: BỐC BÀI ---
-with tab1:
-    st.subheader("🔓 Khu vực xoay thẻ")
-    code_input = st.text_input("Nhập mã bí mật:", type="password", key="code_card")
-    
-    if code_input == "hihihi":
-        if st.button("🚀 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
-            if not df.empty:
-                with st.spinner("Đang tìm thử thách..."):
-                    time.sleep(0.8)
-                random_effect()
-                row = df.sample(n=1).iloc[0]
-                if str(row['type']).lower() in ['sự thật', 'truth']:
-                    st.info(f"✨ **TRUTH:** \n\n ### {row['content']}")
-                else:
-                    st.error(f"🔥 **DARE:** \n\n ### {row['content']}")
-    else:
-        st.button("🎁 Mở bài (Cần mã)", disabled=True, use_container_width=True)
-
-# --- TAB 2: VÒNG QUAY MAY MẮN ---
-with tab2:
-    st.subheader("🎡 Ai sẽ là người tiếp theo?")
-    if st.button("🎯 XOAY NGƯỜI MAY MẮN", use_container_width=True):
-        if len(team_members) > 0:
-            # Hiệu ứng chạy tên giả lập vòng quay
-            placeholder = st.empty()
-            for _ in range(15):  # Chạy 15 lần để tạo hiệu ứng
-                random_name = random.choice(team_members)
-                placeholder.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{random_name}</h1>", unsafe_allow_html=True)
-                time.sleep(0.1)
+if code_input == "hihihi":
+    if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
+        if not df.empty:
+            with st.spinner("Đang xào bài..."):
+                time.sleep(1) # Tạo hiệu ứng chờ đợi cho hồi hộp
+                
+            random_effect()
+            row = df.sample(n=1).iloc[0]
             
-            # Kết quả cuối cùng
-            winner = random.choice(team_members)
-            placeholder.markdown(f"<h1 style='text-align: center; color: #00FF00; border: 2px solid #00FF00; border-radius: 10px; padding: 10px;'>🏆 {winner}</h1>", unsafe_allow_html=True)
-            st.balloons()
-            st.success(f"Người được chọn là: **{winner}**! Chúc may mắn nha!")
+            # Hiển thị kết quả trong một khung (Box) đẹp hơn
+            st.markdown("### Kết quả dành cho bạn:")
+            if str(row['type']).lower() in ['sự thật', 'truth']:
+                st.info(f"✨ **TRUTH (SỰ THẬT):** \n\n ### {row['content']}")
+            else:
+                st.error(f"🔥 **DARE (THỬ THÁCH):** \n\n ### {row['content']}")
         else:
-            st.warning("Hãy nhập tên thành viên ở thanh bên (Sidebar) trước!")
+            st.warning("Kho bài đang trống, hãy thêm câu hỏi bên dưới nhé!")
+else:
+    if code_input != "":
+        st.error("Sai mã rồi bạn ơi! 😂")
+    st.button("🎁 Mở thẻ bài (Cần mã)", disabled=True, use_container_width=True)
 
 st.divider()
 
-# --- 5. THÊM CÂU HỎI ---
+# --- 6. THÊM CÂU HỎI ---
 st.subheader("➕ Đóng góp nội dung")
-with st.expander("Thêm câu hỏi mới vào kho"):
+with st.expander("Nhấn vào đây để thêm câu hỏi mới"):
     with st.form("add_form", clear_on_submit=True):
-        c = st.text_input("Nội dung:")
+        c = st.text_input("Nội dung thử thách/câu hỏi:")
         t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])
-        if st.form_submit_button("Lưu vĩnh viễn"):
+        submit = st.form_submit_button("Lưu vào kho bài")
+        
+        if submit:
             if c:
                 new_row = pd.DataFrame([{"content": c, "type": t}])
                 updated_df = pd.concat([df, new_row], ignore_index=True)
                 conn.update(data=updated_df)
-                st.toast("Đã thêm thành công!", icon="✅")
+                st.balloons()
+                st.success("Đã lưu! Hãy bốc bài để xem nội dung mới.")
+            else:
+                st.warning("Vui lòng nhập nội dung trước khi lưu!")

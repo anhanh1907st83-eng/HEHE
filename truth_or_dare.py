@@ -5,24 +5,60 @@ import random
 from PIL import Image
 import os
 import time
+import streamlit.components.v1 as components
 
 # 1. Cấu hình trang
 st.set_page_config(page_title="Truth or Dare - Team", page_icon="🎲", layout="centered")
 
-# Hàm tạo hiệu ứng ngẫu nhiên
+# Hàm tạo hiệu ứng Hoa rơi (Custom CSS)
+def flower_effect():
+    flower_css = """
+    <div class="flower-container">
+        <style>
+            .flower {
+                position: fixed;
+                top: -10%;
+                z-index: 9999;
+                user-select: none;
+                cursor: default;
+                animation: fall 3s linear infinite;
+            }
+            @keyframes fall {
+                0% { top: -10%; transform: translateX(0) rotate(0deg); }
+                100% { top: 110%; transform: translateX(100px) rotate(360deg); }
+            }
+        </style>
+        <script>
+            const flowers = ['🌸', '🌹', '🌻', '🌷', '🌼'];
+            for (let i = 0; i < 50; i++) {
+                let div = document.createElement('div');
+                div.className = 'flower';
+                div.innerHTML = flowers[Math.floor(Math.random() * flowers.length)];
+                div.style.left = Math.random() * 100 + 'vw';
+                div.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                div.style.fontSize = (Math.random() * 20 + 20) + 'px';
+                div.style.opacity = Math.random();
+                document.body.appendChild(div);
+                setTimeout(() => div.remove(), 4000);
+            }
+        </script>
+    </div>
+    """
+    components.html(flower_css, height=0)
+
+# Hàm tạo hiệu ứng ngẫu nhiên cập nhật
 def random_effect():
-    effect = random.choice(["balloons", "snow", "toast"])
+    effect = random.choice(["balloons", "flowers", "toast"])
     if effect == "balloons":
         st.balloons()
-    elif effect == "snow":
-        st.snow()
+    elif effect == "flowers":
+        flower_effect() # Gọi hiệu ứng hoa rơi ở đây
     else:
         st.toast("🔥 Tới công chuyện luôn!", icon="🎯")
 
 # --- 2. THANH BÊN (SIDEBAR) ---
 with st.sidebar:
     st.header("👥 THÀNH VIÊN")
-    # Bạn có thể sửa danh sách tên ở đây
     team_members = st.text_area("Nhập tên các thành viên (cách nhau bằng dấu phẩy):", 
                                 "Tuấn Anh, Dương Ngọc, Nhựt Thành, Ngọc My, Như Ý (nhỏ), Như Ý (bự), Ngọc My, Diễm Trang").split(",")
     team_members = [name.strip() for name in team_members if name.strip()]
@@ -47,7 +83,6 @@ df = get_data()
 # --- 4. GIAO DIỆN CHÍNH ---
 st.title("🎲 Truth or Dare & Lucky Spin")
 
-# Tab để phân chia giữa bốc bài và vòng quay
 tab1, tab2 = st.tabs(["🎁 Bốc Bài", "🎡 Vòng Quay May Mắn"])
 
 # --- TAB 1: BỐC BÀI ---
@@ -74,17 +109,15 @@ with tab2:
     st.subheader("🎡 Ai sẽ là người tiếp theo?")
     if st.button("🎯 XOAY NGƯỜI MAY MẮN", use_container_width=True):
         if len(team_members) > 0:
-            # Hiệu ứng chạy tên giả lập vòng quay
             placeholder = st.empty()
-            for _ in range(15):  # Chạy 15 lần để tạo hiệu ứng
+            for _ in range(15):
                 random_name = random.choice(team_members)
                 placeholder.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{random_name}</h1>", unsafe_allow_html=True)
                 time.sleep(0.1)
             
-            # Kết quả cuối cùng
             winner = random.choice(team_members)
             placeholder.markdown(f"<h1 style='text-align: center; color: #00FF00; border: 2px solid #00FF00; border-radius: 10px; padding: 10px;'>🏆 {winner}</h1>", unsafe_allow_html=True)
-            st.balloons()
+            flower_effect() # Ưu tiên hoa rơi khi thắng vòng quay
             st.success(f"Người được chọn là: **{winner}**! Chúc may mắn nha!")
         else:
             st.warning("Hãy nhập tên thành viên ở thanh bên (Sidebar) trước!")
@@ -99,4 +132,7 @@ with st.expander("Thêm câu hỏi mới vào kho"):
         t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])
         if st.form_submit_button("Lưu vĩnh viễn"):
             if c:
-                new_row = pd.DataFrame
+                new_row = pd.DataFrame([{"content": c, "type": t}])
+                updated_df = pd.concat([df, new_row], ignore_index=True)
+                conn.update(data=updated_df)
+                st.toast("Đã thêm thành công!", icon="🌸")

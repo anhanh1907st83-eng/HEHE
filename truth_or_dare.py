@@ -6,8 +6,15 @@ from PIL import Image
 
 st.set_page_config(page_title="Truth or Dare - Team", page_icon="🎲", layout="centered")
 
+# Hàm tạo hiệu ứng ngẫu nhiên
+def random_effect():
+    effect = random.choice(["balloons", "snow"])
+    if effect == "balloons":
+        st.balloons()
+    else:
+        st.snow()
+
 # --- HIỂN THỊ HÌNH ẢNH NHÓM ---
-# Cách 1: Hiển thị ở đầu trang như một Banner kỷ niệm
 try:
     img = Image.open("background.jpg")
     st.image(img, use_container_width=True, caption="Kỷ niệm chúng mình ❤️")
@@ -26,22 +33,22 @@ def get_data():
         return pd.DataFrame(columns=['content', 'type'])
 
 df = get_data()
-
-# Thống kê
 total_q = len(df)
 
 st.title("🎲 Truth or Dare Private")
 st.write(f"🔥 Hiện đang có **{total_q}** thử thách trong kho bài!")
-
 st.divider()
 
-# --- PHẦN 1: XOAY THẺ (BỊ KHÓA) ---
+# --- PHẦN 1: XOAY THẺ ---
 st.subheader("🔓 Khu vực xoay thẻ")
 code_input = st.text_input("Nhập mã bí mật:", type="password")
 
 if code_input == "hihihi":
     if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
         if not df.empty:
+            # Gọi hiệu ứng ngẫu nhiên khi bốc bài
+            random_effect()
+            
             row = df.sample(n=1).iloc[0]
             if str(row['type']).lower() == 'sự thật':
                 st.info(f"✨ **TRUTH:** \n\n {row['content']}")
@@ -54,7 +61,6 @@ st.divider()
 
 # --- PHẦN 2: THÊM CÂU HỎI ---
 st.subheader("➕ Đóng góp nội dung")
-st.write("Nhập theo cấu trúc nếu không làm được hoặc nói sai sự thật thì kèm theo hình phạt")
 with st.form("add_form", clear_on_submit=True):
     c = st.text_input("Nội dung:")
     t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])
@@ -63,14 +69,14 @@ with st.form("add_form", clear_on_submit=True):
             new_row = pd.DataFrame([{"content": c, "type": t}])
             updated_df = pd.concat([df, new_row], ignore_index=True)
             conn.update(data=updated_df)
-            st.success("Đã thêm! Hệ thống đang cập nhật...")
-            st.rerun()
+            
+            # Hiệu ứng khi thêm thành công
+            random_effect()
+            st.success("Đã thêm thành công!")
+            # Không dùng st.rerun() ngay để hiệu ứng kịp chạy
 
-# --- HIỂN THỊ HÌNH ẢNH Ở THANH BÊN (TÙY CHỌN) ---
+# --- THANH BÊN ---
 with st.sidebar:
     st.header("GƯƠNG MẶT THÂN QUEN")
     try:
-        st.image("background.jpg")
-    except:
-        pass
-    st.write("App này dành riêng cho hội bạn thân. Chơi vui vẻ nhé!")
+        st.image

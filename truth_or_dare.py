@@ -28,7 +28,7 @@ with st.sidebar:
     else:
         st.info("Hãy tải 'background.jpg' lên cùng thư mục code!")
     st.divider()
-    st.write("🎮 **Luật chơi:** Đã chọn là phải làm, không được huỷ!")
+    st.write("🎮 **Luật chơi:** Đã chọn là phải làm, không được bỏ!")
 
 # --- 3. BANNER CHÍNH ---
 try:
@@ -58,13 +58,13 @@ st.divider()
 
 # --- 5. KHU VỰC CHƠI ---
 st.subheader("🔓 Khu vực xoay thẻ")
-code_input = st.text_input("🔑 Nhập mã bí mật để mở khóa:", type="password")
+code_input = st.text_input("🔑 Nhập mã để mở khóa:", type="password")
 
 if code_input == "hihihi":
     if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
         if not df.empty:
             with st.spinner("Đang xào bài..."):
-                time.sleep(1) # Tạo hiệu ứng chờ đợi cho hồi hộp
+                time.sleep(2) # Tạo hiệu ứng chờ đợi cho hồi hộp
                 
             random_effect()
             row = df.sample(n=1).iloc[0]

@@ -9,9 +9,12 @@ import time
 # 1. Cấu hình trang
 st.set_page_config(page_title="Truth or Dare - Team", page_icon="🎲", layout="centered")
 
-# Hàm tạo hiệu ứng ngẫu nhiên (Thêm nhiều lựa chọn hơn)
+# Khởi tạo trạng thái phiên (Session State) để lưu lịch sử bài đã bốc
+if 'drawn_indices' not in st.session_state:
+    st.session_state.drawn_indices = []
+
+# Hàm tạo hiệu ứng ngẫu nhiên
 def random_effect():
-    # Chọn ngẫu nhiên giữa bong bóng, tuyết, và các hiệu ứng toast
     eff_type = random.choice(["balloons", "snow", "toast"])
     if eff_type == "balloons":
         st.balloons()
@@ -28,7 +31,15 @@ with st.sidebar:
     else:
         st.info("Hãy tải 'background.jpg' lên cùng thư mục code!")
     st.divider()
-    st.write("🎮 **Luật chơi:** Đã chọn là phải làm, không được bỏ!")
+    
+    # Thêm nút Reset thủ công ở sidebar
+    st.write("🎮 **Công cụ Game Master**")
+    if st.button("🔄 Xào lại bộ bài (Reset)", use_container_width=True):
+        st.session_state.drawn_indices = []
+        st.rerun()
+        
+    st.divider()
+    st.write("📝 **Luật chơi:** Đã chọn là phải làm, không được bỏ!")
 
 # --- 3. BANNER CHÍNH ---
 try:
@@ -42,8 +53,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # Đọc dữ liệu từ Google Sheets
-        df = conn.read(ttl="1m") # Cache trong 1 phút để tránh load lại quá nhiều
+        df = conn.read(ttl="1m") 
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
     except Exception as e:
@@ -52,8 +62,15 @@ def get_data():
 
 df = get_data()
 
+# --- Xử lý Logic lọc bài trùng ---
+# Tạo danh sách các index chưa được bốc
+if not df.empty:
+    available_indices = [i for i in df.index if i not in st.session_state.drawn_indices]
+else:
+    available_indices = []
+
 st.title("🎲 Truth or Dare Private")
-st.caption(f"Kho bài hiện tại: {len(df)} câu hỏi")
+st.caption(f"Kho bài: {len(df)} | Đã bốc: {len(st.session_state.drawn_indices)} | Còn lại: {len(available_indices)}")
 st.divider()
 
 # --- 5. KHU VỰC CHƠI ---
@@ -61,22 +78,42 @@ st.subheader("🔓 Khu vực xoay thẻ")
 code_input = st.text_input("🔑 Nhập mã để mở khóa:", type="password")
 
 if code_input == "hihihi":
-    if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
-        if not df.empty:
+    # Kiểm tra xem còn bài không
+    if len(available_indices) > 0:
+        if st.button("🎁 BỐC BÀI NGẪU NHIÊN", use_container_width=True):
             with st.spinner("Đang xào bài..."):
-                time.sleep(2) # Tạo hiệu ứng chờ đợi cho hồi hộp
-                
-            random_effect()
-            row = df.sample(n=1).iloc[0]
+                time.sleep(1.5) 
             
-            # Hiển thị kết quả trong một khung (Box) đẹp hơn
+            random_effect()
+            
+            # --- LOGIC MỚI: Chọn ngẫu nhiên từ danh sách CHƯA BỐC ---
+            chosen_index = random.choice(available_indices)
+            row = df.loc[chosen_index]
+            
+            # Lưu index vào session_state để không bốc lại nữa
+            st.session_state.drawn_indices.append(chosen_index)
+            
+            # Hiển thị kết quả
             st.markdown("### Kết quả dành cho bạn:")
             if str(row['type']).lower() in ['sự thật', 'truth']:
                 st.info(f"✨ **TRUTH (SỰ THẬT):** \n\n ### {row['content']}")
             else:
                 st.error(f"🔥 **DARE (THỬ THÁCH):** \n\n ### {row['content']}")
-        else:
-            st.warning("Kho bài đang trống, hãy thêm câu hỏi bên dưới nhé!")
+            
+            # Rerun để cập nhật số lượng bài còn lại trên giao diện ngay lập tức
+            # (Tùy chọn, bỏ dòng này nếu muốn giữ kết quả lâu hơn trước khi UI refresh)
+            # st.rerun() 
+            
+    else:
+        # Hết bài
+        st.warning("😱 Đã hết thẻ bài rồi!")
+        if st.button("🔄 Xào lại bài để chơi tiếp", use_container_width=True):
+            st.session_state.drawn_indices = [] # Reset list
+            st.rerun()
+
+    if df.empty:
+        st.warning("Kho bài đang trống, hãy thêm câu hỏi bên dưới nhé!")
+
 else:
     if code_input != "":
         st.error("Sai mã rồi bạn ơi! 😂")
@@ -99,5 +136,7 @@ with st.expander("Nhấn vào đây để thêm câu hỏi mới"):
                 conn.update(data=updated_df)
                 st.balloons()
                 st.success("Đã lưu! Hãy bốc bài để xem nội dung mới.")
+                # Clear cache data để cập nhật ngay lập tức
+                st.cache_data.clear()
             else:
                 st.warning("Vui lòng nhập nội dung trước khi lưu!")

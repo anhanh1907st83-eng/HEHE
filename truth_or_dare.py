@@ -191,4 +191,3 @@ with st.expander("📝 Nhấn để mở form đóng góp", expanded=True):
             else:
                 st.warning("Nhập nội dung đi bạn!")
 
-st.caption("Âm thanh được tạo bởi trình duyệt của bạn (Chị Google).")

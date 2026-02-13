@@ -83,8 +83,6 @@ def show_card_popup():
             css_class = "card-dare"
             icon = "😈"
         
-        # 1. Đọc giọng nói
-        auto_read_text(f"{display_type}. {c_content}")
         
         # 2. Hiển thị Card
         st.markdown(f"""
@@ -104,7 +102,6 @@ def show_card_popup():
             remain = len(df) - len(st.session_state.drawn_indices)
             if remain > 0:
                 if st.button("🔄 Xoay tiếp", type="primary", use_container_width=True):
-                    pick_card()
                     st.rerun()
             else:
                 st.button("Hết bài", disabled=True, use_container_width=True)

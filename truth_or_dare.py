@@ -187,4 +187,72 @@ if not st.session_state.is_authenticated:
         st.info("🔒 Phòng chơi riêng tư")
         pwd = st.text_input("Nhập mật khẩu phòng:", type="password")
         if st.button("Vào chơi", use_container_width=True, type="primary"):
-            if pwd
+            if pwd == "hihihi":
+                st.session_state.is_authenticated = True
+                st.toast("Đăng nhập thành công!", icon="🎉")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Sai mật khẩu rồi bạn ơi!")
+    st.stop() # Dừng render phần dưới nếu chưa login
+
+# --- MÀN HÌNH GAME (SAU KHI LOGIN) ---
+
+# Thống kê & Progress Bar
+total_cards = len(df)
+drawn_count = len(st.session_state.drawn_indices)
+remain_count = total_cards - drawn_count
+progress = drawn_count / total_cards if total_cards > 0 else 0
+
+st.progress(progress, text=f"Tiến độ cuộc chơi: {drawn_count}/{total_cards}")
+
+# Khu vực hành động chính
+spacer1, main_col, spacer2 = st.columns([1, 2, 1])
+
+with main_col:
+    st.write("")
+    st.write("")
+    if remain_count > 0:
+        # Nút Bốc Bài Siêu To
+        if st.button("🚀 BỐC BÀI NGAY", use_container_width=True, type="primary"):
+            with st.spinner("🎲 Đang xoay vòng quay định mệnh..."):
+                time.sleep(0.8) # Tạo chút hồi hộp
+            pick_card()
+            show_card_dialog() # Mở popup
+    else:
+        st.warning("😱 Ối! Hết thẻ bài rồi!")
+        if st.button("🔄 Xào lại bài từ đầu", use_container_width=True):
+            reset_game()
+
+# --- SIDEBAR (ADMIN TOOL) ---
+with st.sidebar:
+    st.header("⚙️ Game Master")
+    st.write(f"Kho bài hiện tại: **{total_cards}** thẻ")
+    
+    if st.button("Resest Game", icon="🔄"):
+        reset_game()
+        
+    st.divider()
+    
+    with st.expander("📝 Thêm thẻ bài nhanh"):
+        with st.form("quick_add"):
+            new_c = st.text_area("Nội dung:")
+            new_t = st.selectbox("Loại:", ["Truth", "Dare"])
+            if st.form_submit_button("Lưu"):
+                if new_c:
+                    try:
+                        conn = st.connection("gsheets", type=GSheetsConnection)
+                        new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
+                        updated_df = pd.concat([df, new_row], ignore_index=True)
+                        conn.update(data=updated_df)
+                        st.success("Đã thêm!")
+                        time.sleep(1)
+                        st.cache_data.clear()
+                        st.rerun()
+                    except:
+                        st.error("Lỗi kết nối GSheets (hoặc đang dùng mock data)")
+                else:
+                    st.warning("Viết gì đó đi chứ!")
+
+# Footer
+st.markdown("<div style='text-align: center; margin-top: 50px; color: #666;'>Built with ❤️ by Gemini</div>", unsafe_allow_html=True)

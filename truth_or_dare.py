@@ -6,7 +6,7 @@ import time
 
 # --- 1. CẤU HÌNH TRANG & CSS LIGHT MODE ---
 st.set_page_config(
-    page_title="Truth or Dare",
+    page_title="Truth or Dare - Private",
     page_icon="🎲",
     layout="centered"
 )
@@ -82,7 +82,7 @@ def get_data():
         # Mock Data (Dữ liệu mẫu)
         return pd.DataFrame({
             'content': ["Khai thật số dư tài khoản.", "Hít đất 10 cái.", "Kể về tình đầu.", "Gọi cho người yêu cũ."],
-            'type': ['Truth', 'Dare', 'Truth', 'Dare']
+            'type': ['Sự thật', 'Thử thách', 'Sự thật', 'Thử thách']
         })
 
 df = get_data()
@@ -104,7 +104,7 @@ def show_card_popup():
     if card is not None:
         c_type = str(card['type']).capitalize()
         # Kiểm tra loại thẻ để tô màu
-        is_truth = c_type.lower() in ['truth', 'sự thật']
+        is_truth = c_type.lower() in ['sự thật', 'sự thật']
         css_class = "card-truth" if is_truth else "card-dare"
         icon = "😇" if is_truth else "😈"
         
@@ -130,7 +130,7 @@ def show_card_popup():
                 st.button("Hết bài", disabled=True, use_container_width=True)
 
 # --- 6. GIAO DIỆN CHÍNH ---
-st.title("🎲 Truth or Dare")
+st.title("🎲 Truth or Dare - Phiên bản nội bộ")
 
 # Thống kê
 total = len(df)
@@ -145,12 +145,12 @@ st.subheader("🔥 Khu vực xoay bài")
 col_pwd, col_btn = st.columns([1, 2])
 
 with col_pwd:
-    code_input = st.text_input("Mật khẩu Admin:", type="password", placeholder="Nhập 'hihihi'...")
+    code_input = st.text_input("Mật khẩu Admin:", type="password", placeholder="")
 
 with col_btn:
     st.write("") # Spacer cho thẳng hàng
     st.write("") 
-    if code_input == "hihihi":
+    if code_input == "matkhau":
         # Mật khẩu đúng -> Hiện nút chơi
         if (total - drawn) > 0:
             if st.button("🚀 BẮT ĐẦU QUAY", use_container_width=True, type="primary"):
@@ -178,7 +178,7 @@ with st.expander("📝 Nhấn để mở form thêm câu hỏi", expanded=True):
         with c1:
             new_content = st.text_input("Nội dung câu hỏi/thử thách:", placeholder="Ví dụ: Hát một bài...")
         with c2:
-            new_type = st.selectbox("Loại thẻ:", ["Truth", "Dare"])
+            new_type = st.selectbox("Loại thẻ:", ["Sự thật", "Thử thách"])
             
         submit_btn = st.form_submit_button("Lưu vào bộ bài 💾", use_container_width=True)
         

@@ -4,77 +4,28 @@ import pandas as pd
 import random
 import time
 
-# --- 1. CẤU HÌNH TRANG & CSS DARK MODE ---
+# --- 1. CẤU HÌNH TRANG & CSS ---
 st.set_page_config(
-    page_title="Truth or Dare - Ultimate Party",
+    page_title="Truth or Dare - Party",
     page_icon="🔥",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS TÙY CHỈNH (MAGIC UI) ---
+# --- CSS TÙY CHỈNH (GIAO DIỆN DARK MODE) ---
 st.markdown("""
 <style>
-    /* Tổng quan */
-    .stApp {
-        background-color: #0E1117;
-        color: white;
-    }
-    
-    /* Card Container */
+    .stApp { background-color: #0E1117; color: white; }
     .game-card {
-        padding: 30px;
-        border-radius: 20px;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        animation: fadeIn 0.5s;
-        margin-bottom: 20px;
-        color: white;
+        padding: 30px; border-radius: 20px; text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 20px; color: white;
     }
-    
-    /* Truth Card Style */
-    .card-truth {
-        background: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
-        border: 2px solid #89f7fe;
-    }
-    
-    /* Dare Card Style */
-    .card-dare {
-        background: linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%);
-        border: 2px solid #ff9a9e;
-    }
-    
-    /* Text Styles */
-    .card-type {
-        font-size: 1.5rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        margin-bottom: 10px;
-        opacity: 0.8;
-    }
-    .card-content {
-        font-size: 2rem;
-        font-weight: bold;
-        line-height: 1.4;
-    }
-    
-    /* Animation */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* Custom Button */
-    .stButton > button {
-        border-radius: 50px;
-        font-weight: bold;
-        height: 50px;
-        transition: all 0.3s;
-    }
-    .stButton > button:hover {
-        transform: scale(1.05);
-    }
+    .card-truth { background: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%); border: 2px solid #89f7fe; }
+    .card-dare { background: linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%); border: 2px solid #ff9a9e; }
+    .card-type { font-size: 1.5rem; font-weight: 800; text-transform: uppercase; margin-bottom: 10px; opacity: 0.8; }
+    .card-content { font-size: 2rem; font-weight: bold; line-height: 1.4; }
+    .stButton > button { border-radius: 50px; font-weight: bold; height: 50px; transition: all 0.3s; }
+    .stButton > button:hover { transform: scale(1.05); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,29 +35,23 @@ if 'drawn_indices' not in st.session_state:
 if 'current_card' not in st.session_state:
     st.session_state.current_card = None
 if 'is_authenticated' not in st.session_state:
-    st.session_state.is_authenticated = False
+    st.session_state.is_authenticated = False # Mặc định chưa đăng nhập quyền Admin
 
-# --- 3. DỮ LIỆU (KÈM DATA MẪU NẾU KHÔNG CÓ GSHEETS) ---
+# --- 3. DỮ LIỆU ---
 def get_data():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(ttl="1m")
         df.columns = [str(c).strip().lower() for c in df.columns]
-        # Validate columns
         if 'content' not in df.columns or 'type' not in df.columns:
-            raise ValueError("Cấu trúc bảng không đúng")
+            return pd.DataFrame(columns=['content', 'type'])
         return df
-    except Exception:
-        # Dữ liệu giả lập để test ngay lập tức mà không cần kết nối DB
-        mock_data = {
-            'content': [
-                "Kể về mối tình đầu của bạn?", "Gọi điện cho người yêu cũ nói nhớ họ.", 
-                "Ai là người bạn ghét nhất ở đây?", "Hít đất 10 cái ngay lập tức.",
-                "Khai thật số dư tài khoản ngân hàng.", "Uống hết ly nước trong 1 hơi."
-            ],
-            'type': ['Truth', 'Dare', 'Truth', 'Dare', 'Truth', 'Dare']
-        }
-        return pd.DataFrame(mock_data)
+    except:
+        # Mock Data nếu chưa nối Gsheet
+        return pd.DataFrame({
+            'content': ["Khai thật số dư tài khoản.", "Hít đất 10 cái.", "Kể về tình đầu."],
+            'type': ['Truth', 'Dare', 'Truth']
+        })
 
 df = get_data()
 
@@ -117,56 +62,38 @@ def reset_game():
     st.rerun()
 
 def pick_card():
-    # Lấy danh sách index chưa bốc
     available = [i for i in df.index if i not in st.session_state.drawn_indices]
-    
     if available:
         idx = random.choice(available)
-        row = df.loc[idx]
-        
-        # Cập nhật state
         st.session_state.drawn_indices.append(idx)
-        st.session_state.current_card = row
-        
-        # Hiệu ứng ngẫu nhiên
+        st.session_state.current_card = df.loc[idx]
         eff = random.choice(["balloons", "snow"])
         if eff == "balloons": st.balloons()
         else: st.snow()
-        
-        return True # Thành công
-    else:
-        return False # Hết bài
+        return True
+    return False
 
-# --- 5. POPUP HIỂN THỊ (DIALOG) ---
+# --- 5. POPUP (DIALOG) ---
 @st.dialog("🔥 LÁ BÀI ĐỊNH MỆNH 🔥")
 def show_card_dialog():
     card = st.session_state.current_card
-    
     if card is not None:
         c_type = str(card['type']).capitalize()
-        c_content = card['content']
-        
-        # Xác định Style dựa trên loại thẻ
         is_truth = c_type.lower() in ['truth', 'sự thật']
         css_class = "card-truth" if is_truth else "card-dare"
         icon = "🟦" if is_truth else "🟥"
         
-        # Render HTML Card
         st.markdown(f"""
         <div class="game-card {css_class}">
             <div class="card-type">{icon} {c_type}</div>
-            <div class="card-content">{c_content}</div>
+            <div class="card-content">{card['content']}</div>
         </div>
         """, unsafe_allow_html=True)
         
-        st.write("") # Spacer
-        
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("❌ Đóng", use_container_width=True):
-                st.rerun()
+            if st.button("❌ Đóng", use_container_width=True): st.rerun()
         with col2:
-            # Kiểm tra xem còn bài không để hiện nút "Tiếp tục"
             remain = len(df) - len(st.session_state.drawn_indices)
             if remain > 0:
                 if st.button("🎲 Bốc tiếp", type="primary", use_container_width=True):
@@ -176,83 +103,78 @@ def show_card_dialog():
                 st.button("Hết bài", disabled=True, use_container_width=True)
 
 # --- 6. GIAO DIỆN CHÍNH ---
-
-# Header Section
 st.markdown("<h1 style='text-align: center; color: #FF4B2B;'>🎲 TRUTH OR DARE</h1>", unsafe_allow_html=True)
 
-# --- MÀN HÌNH ĐĂNG NHẬP (BẢO MẬT NHẸ) ---
-if not st.session_state.is_authenticated:
-    c1, c2, c3 = st.columns([1,2,1])
-    with c2:
-        st.info("🔒 Phòng chơi riêng tư")
-        pwd = st.text_input("Nhập mật khẩu phòng:", type="password")
-        if st.button("Vào chơi", use_container_width=True, type="primary"):
+# Thống kê
+total_cards = len(df)
+drawn_count = len(st.session_state.drawn_indices)
+st.progress(drawn_count / total_cards if total_cards > 0 else 0, text=f"Tiến độ: {drawn_count}/{total_cards}")
+
+st.divider()
+
+# --- KHU VỰC ĐIỀU KHIỂN GAME (QUAN TRỌNG: CÓ LOGIC CHECK PASS) ---
+col1, col2, col3 = st.columns([1, 2, 1])
+
+with col2:
+    # Nếu ĐÃ đăng nhập -> Hiện nút chơi
+    if st.session_state.is_authenticated:
+        st.success("🔓 Chế độ Host: Đã mở khóa", icon="✅")
+        if (total_cards - drawn_count) > 0:
+            if st.button("🚀 BỐC BÀI NGAY", use_container_width=True, type="primary"):
+                with st.spinner("🎲 Đang xoay..."):
+                    time.sleep(0.8)
+                pick_card()
+                show_card_dialog()
+        else:
+            st.warning("Hết bài rồi!")
+            if st.button("🔄 Xào lại bài", use_container_width=True):
+                reset_game()
+    
+    # Nếu CHƯA đăng nhập -> Hiện ô nhập pass
+    else:
+        st.info("🔒 Khu vực dành cho Host")
+        pwd = st.text_input("Nhập mã để mở khóa nút xoay:", type="password", placeholder="Nhập 'hihihi'...")
+        if pwd:
             if pwd == "hihihi":
                 st.session_state.is_authenticated = True
-                st.toast("Đăng nhập thành công!", icon="🎉")
+                st.toast("Đã mở khóa quyền Host!", icon="🔓")
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("Sai mật khẩu rồi bạn ơi!")
-    st.stop() # Dừng render phần dưới nếu chưa login
+                st.error("Sai mã rồi!")
 
-# --- MÀN HÌNH GAME (SAU KHI LOGIN) ---
-
-# Thống kê & Progress Bar
-total_cards = len(df)
-drawn_count = len(st.session_state.drawn_indices)
-remain_count = total_cards - drawn_count
-progress = drawn_count / total_cards if total_cards > 0 else 0
-
-st.progress(progress, text=f"Tiến độ cuộc chơi: {drawn_count}/{total_cards}")
-
-# Khu vực hành động chính
-spacer1, main_col, spacer2 = st.columns([1, 2, 1])
-
-with main_col:
-    st.write("")
-    st.write("")
-    if remain_count > 0:
-        # Nút Bốc Bài Siêu To
-        if st.button("🚀 BỐC BÀI NGAY", use_container_width=True, type="primary"):
-            with st.spinner("🎲 Đang xoay vòng quay định mệnh..."):
-                time.sleep(0.8) # Tạo chút hồi hộp
-            pick_card()
-            show_card_dialog() # Mở popup
-    else:
-        st.warning("😱 Ối! Hết thẻ bài rồi!")
-        if st.button("🔄 Xào lại bài từ đầu", use_container_width=True):
-            reset_game()
-
-# --- SIDEBAR (ADMIN TOOL) ---
+# --- 7. SIDEBAR (CÔNG KHAI CHO MỌI NGƯỜI THÊM BÀI) ---
 with st.sidebar:
-    st.header("⚙️ Game Master")
-    st.write(f"Kho bài hiện tại: **{total_cards}** thẻ")
+    st.header("📝 Đóng góp câu hỏi")
+    st.caption("Mọi người đều có thể thêm câu hỏi vào kho!")
     
-    if st.button("Resest Game", icon="🔄"):
-        reset_game()
+    with st.form("public_add_form", clear_on_submit=True):
+        new_c = st.text_area("Nội dung thử thách/câu hỏi:")
+        new_t = st.selectbox("Loại:", ["Truth", "Dare"])
+        submitted = st.form_submit_button("Gửi lên kho bài 📤")
         
+        if submitted:
+            if new_c:
+                try:
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
+                    updated_df = pd.concat([df, new_row], ignore_index=True)
+                    conn.update(data=updated_df)
+                    st.toast("Đã gửi thành công! Cảm ơn bạn.", icon="💖")
+                    time.sleep(1)
+                    st.cache_data.clear()
+                    st.rerun() # Reload để cập nhật số lượng bài
+                except:
+                    st.error("Lỗi kết nối (hoặc đang dùng data mẫu).")
+            else:
+                st.warning("Đừng để trống nội dung nhé!")
+
     st.divider()
     
-    with st.expander("📝 Thêm thẻ bài nhanh"):
-        with st.form("quick_add"):
-            new_c = st.text_area("Nội dung:")
-            new_t = st.selectbox("Loại:", ["Truth", "Dare"])
-            if st.form_submit_button("Lưu"):
-                if new_c:
-                    try:
-                        conn = st.connection("gsheets", type=GSheetsConnection)
-                        new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
-                        updated_df = pd.concat([df, new_row], ignore_index=True)
-                        conn.update(data=updated_df)
-                        st.success("Đã thêm!")
-                        time.sleep(1)
-                        st.cache_data.clear()
-                        st.rerun()
-                    except:
-                        st.error("Lỗi kết nối GSheets (hoặc đang dùng mock data)")
-                else:
-                    st.warning("Viết gì đó đi chứ!")
+    # Nút thoát quyền Host (nếu đang đăng nhập)
+    if st.session_state.is_authenticated:
+        if st.button("Đăng xuất quyền Host"):
+            st.session_state.is_authenticated = False
+            st.rerun()
 
-# Footer
-st.markdown("<div style='text-align: center; margin-top: 50px; color: #666;'>Built with ❤️ by Gemini</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; margin-top: 50px; color: #666; font-size: 0.8rem;'>Built with ❤️ by Gemini</div>", unsafe_allow_html=True)

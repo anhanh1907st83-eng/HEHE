@@ -62,33 +62,7 @@ def get_data():
 
 df = get_data()
 
-# --- 4. HÀM LOGIC & TTS (GIỌNG ĐỌC) ---
-def pick_card():
-    available = [i for i in df.index if i not in st.session_state.drawn_indices]
-    if available:
-        idx = random.choice(available)
-        st.session_state.drawn_indices.append(idx)
-        st.session_state.current_card = df.loc[idx]
-        st.session_state.show_dialog = True 
-        return True
-    return False
 
-# Hàm Javascript đọc Tiếng Việt
-def auto_read_text(text):
-    safe_text = text.replace("'", "").replace('"', "")
-    js_code = f"""
-    <script>
-        function speak() {{
-            window.speechSynthesis.cancel();
-            const msg = new SpeechSynthesisUtterance('{safe_text}');
-            msg.lang = 'vi-VN'; // Bắt buộc đọc giọng Việt
-            msg.rate = 1.0;
-            window.speechSynthesis.speak(msg);
-        }}
-        setTimeout(speak, 500);
-    </script>
-    """
-    components.html(js_code, height=0, width=0)
 
 # --- 5. POPUP HIỂN THỊ (DIALOG) ---
 @st.dialog("✨ LÁ BÀI ĐỊNH MỆNH ✨")

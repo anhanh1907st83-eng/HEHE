@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 # --- 1. CẤU HÌNH TRANG ---
 st.set_page_config(page_title="Sự Thật hay Thử Thách", page_icon="🎲", layout="centered")
 
-# CSS Light Mode & Card UI
+# CSS Light Mode & Giao diện thẻ bài
 st.markdown("""
 <style>
     .stApp { background-color: #ffffff; color: #31333F; }
@@ -26,13 +26,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SESSION STATE ---
+# --- 2. KHỞI TẠO SESSION STATE ---
 if 'drawn_indices' not in st.session_state: st.session_state.drawn_indices = []
 if 'current_card' not in st.session_state: st.session_state.current_card = None
 if 'show_dialog' not in st.session_state: st.session_state.show_dialog = False
 if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
-# --- 3. DATA ---
+# --- 3. KẾT NỐI DỮ LIỆU ---
 def get_data():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -47,7 +47,7 @@ def get_data():
 
 df = get_data()
 
-# --- 4. HÀM ĐỌC GIỌNG TIẾNG VIỆT (FIXED) ---
+# --- 4. HÀM ĐỌC GIỌNG TIẾNG VIỆT (NÂNG CẤP) ---
 def auto_read_vietnamese(text):
     safe_text = text.replace("'", "").replace('"', "")
     js_code = f"""
@@ -57,23 +57,19 @@ def auto_read_vietnamese(text):
             const msg = new SpeechSynthesisUtterance('{safe_text}');
             msg.lang = 'vi-VN';
             
-            // Tìm và ép chọn giọng tiếng Việt trong hệ thống
+            // Tìm giọng Việt trong hệ thống
             const voices = window.speechSynthesis.getVoices();
-            const viVoice = voices.find(v => v.lang.indexOf('vi-VN') !== -1 || v.lang.indexOf('vi_VN') !== -1);
+            const viVoice = voices.find(v => v.lang.includes('vi-VN') || v.lang.includes('vi_VN'));
+            if (viVoice) msg.voice = viVoice;
             
-            if (viVoice) {{
-                msg.voice = viVoice;
-            }}
-            
-            msg.rate = 0.9; // Đọc chậm lại một chút cho rõ
+            msg.rate = 1.0; 
             window.speechSynthesis.speak(msg);
         }}
-
-        // Đợi trình duyệt load danh sách giọng nói rồi mới đọc
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {{
-            window.speechSynthesis.onvoiceschanged = speak;
-        }}
+        // Chạy ngay và chạy khi danh sách giọng nói thay đổi
         speak();
+        if (speechSynthesis.onvoiceschanged !== undefined) {{
+            speechSynthesis.onvoiceschanged = speak;
+        }}
     </script>
     """
     components.html(js_code, height=0, width=0)
@@ -91,18 +87,20 @@ def pick_card():
 
 @st.dialog("✨ LÁ BÀI ĐỊNH MỆNH ✨")
 def show_card_popup():
+    # FIX LỖI: Sử dụng 'is not None' thay vì kiểm tra trực tiếp card
     card = st.session_state.current_card
-    if card:
+    if card is not None:
         raw_type = str(card['type']).lower()
-        display_type = "SỰ THẬT" if raw_type in ['truth', 'sự thật'] else "THỬ THÁCH"
-        css_class = "card-truth" if display_type == "SỰ THẬT" else "card-dare"
+        is_truth = raw_type in ['truth', 'sự thật']
+        display_type = "SỰ THẬT" if is_truth else "THỬ THÁCH"
+        css_class = "card-truth" if is_truth else "card-dare"
         
-        # Gọi đọc giọng nói
+        # Đọc nội dung
         auto_read_vietnamese(f"{display_type}. {card['content']}")
         
         st.markdown(f"""
         <div class="game-card {css_class}">
-            <div class="card-type">{'😇' if display_type == 'SỰ THẬT' else '😈'} {display_type}</div>
+            <div class="card-type">{'😇' if is_truth else '😈'} {display_type}</div>
             <div class="card-content">{card['content']}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -120,19 +118,21 @@ def show_card_popup():
             else:
                 st.button("Hết bài", disabled=True, use_container_width=True)
 
-# --- 6. UI CHÍNH ---
+# --- 6. GIAO DIỆN CHÍNH ---
 st.title("🎲 Sự Thật hay Thử Thách")
 drawn_n = len(st.session_state.drawn_indices)
 st.progress(drawn_n / len(df) if len(df) > 0 else 0)
+st.caption(f"Tiến độ: {drawn_n}/{len(df)}")
 
 st.divider()
 
-# Khu vực xoay bài (Ẩn mật khẩu sau khi nhập đúng)
+# Khu vực xoay bài
 st.subheader("🔥 Khu vực xoay bài")
 if not st.session_state.is_admin:
+    # Ô mật khẩu sẽ ẩn sau khi nhập đúng
     c1, c2 = st.columns([2,1])
     with c1:
-        pwd = st.text_input("Mật khẩu Admin:", type="password")
+        pwd = st.text_input("Nhập mật khẩu Admin:", type="password", placeholder="Mật khẩu là hihihi")
     with c2:
         st.write(" ")
         st.write(" ")
@@ -142,6 +142,7 @@ if not st.session_state.is_admin:
                 st.rerun()
             else: st.error("Sai mã!")
 else:
+    # Khi đã là admin, chỉ hiện nút quay
     col_play, col_lock = st.columns([3, 1])
     with col_play:
         if (len(df) - drawn_n) > 0:
@@ -151,31 +152,39 @@ else:
         else:
             if st.button("🔄 Trộn lại bộ bài", use_container_width=True):
                 st.session_state.drawn_indices = []
+                st.session_state.current_card = None
                 st.rerun()
     with col_lock:
         if st.button("🔒 Khóa", use_container_width=True):
             st.session_state.is_admin = False
             st.rerun()
 
+# Kích hoạt Popup
 if st.session_state.show_dialog:
     show_card_popup()
 
 st.divider()
 
-# Khu vực thêm câu hỏi
+# Khu vực thêm câu hỏi (Công khai ngay trang chính)
 st.subheader("➕ Thêm câu hỏi mới")
-with st.expander("📝 Nhấn để mở form đóng góp", expanded=True):
+with st.expander("📝 Nhấn để mở form đóng góp câu hỏi", expanded=True):
     with st.form("add_form", clear_on_submit=True):
         c1, c2 = st.columns([3, 1])
-        with c1: new_c = st.text_input("Nội dung:")
-        with c2: new_t = st.selectbox("Loại:", ["Sự thật", "Thử thách"])
+        with c1:
+            new_c = st.text_input("Nội dung câu hỏi/thử thách:")
+        with c2:
+            new_t = st.selectbox("Loại bài:", ["Sự thật", "Thử thách"])
+            
         if st.form_submit_button("Lưu ngay 💾", use_container_width=True):
             if new_c:
                 try:
                     conn = st.connection("gsheets", type=GSheetsConnection)
                     new_row = pd.DataFrame([{"content": new_c, "type": new_t}])
-                    conn.update(data=pd.concat([df, new_row], ignore_index=True))
-                    st.success("Đã lưu!")
+                    updated_df = pd.concat([df, new_row], ignore_index=True)
+                    conn.update(data=updated_df)
+                    st.success("Đã thêm thành công!")
                     st.cache_data.clear()
+                    time.sleep(1)
                     st.rerun()
-                except: st.error("Lỗi kết nối!")
+                except: st.error("Lỗi kết nối Google Sheets!")
+            else: st.warning("Vui lòng điền nội dung!")

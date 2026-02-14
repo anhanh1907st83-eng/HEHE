@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import time
 import random
+import uuid
+import extra_streamlit_components as stx
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- CẤU HÌNH ---
 st.set_page_config(page_title="Lắc Lì Xì - Tết 2026", page_icon="🧧", layout="centered")
 
-# Danh sách quà tặng
 REWARDS = [
     "🧧 Giftcode: VIP-TET-2026", 
     "🍀 Lời chúc: Tấn Tài Tấn Lộc",
@@ -18,43 +19,64 @@ REWARDS = [
     "✨ Chúc bạn may mắn lần sau!"
 ]
 
-# --- HÀM LẤY IP (CHUẨN MỚI) ---
+# --- QUẢN LÝ COOKIE (ĐỊNH DANH TRÌNH DUYỆT) ---
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
+
+# --- HÀM LẤY IP ---
 def get_remote_ip():
     try:
-        # Sử dụng st.context.headers thay vì _get_websocket_headers
         if st.context.headers:
-            # Lấy X-Forwarded-For nếu chạy trên Cloud/Proxy
             x_forwarded = st.context.headers.get("X-Forwarded-For")
             if x_forwarded:
+                # Lấy IP đầu tiên trong chuỗi (thường là IP thật)
                 return x_forwarded.split(",")[0].strip()
             return st.context.headers.get("Remote-Addr")
     except Exception:
         pass
     return "unknown_ip"
 
-# --- HÀM XỬ LÝ GOOGLE SHEETS ---
+# --- HÀM DATABASE ---
 def get_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         df = conn.read(worksheet="Logs", ttl=0)
-        if 'name' not in df.columns:
-            df['name'] = ""
+        # Đảm bảo đủ cột
+        expected_cols = ["ip_address", "user_uuid", "name", "reward", "time"]
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = ""
         return df
     except Exception:
-        return pd.DataFrame(columns=["ip_address", "name", "reward", "time"])
+        return pd.DataFrame(columns=["ip_address", "user_uuid", "name", "reward", "time"])
 
-def check_ip_played(ip, df):
-    if ip in df['ip_address'].values:
-        user_row = df[df['ip_address'] == ip].iloc[0]
-        return user_row.get('name', 'Bạn'), user_row['reward'], user_row['time']
+def check_user_played(ip, user_uuid, df):
+    # Logic kiểm tra kép:
+    # 1. Trùng IP
+    # 2. HOẶC Trùng UUID (Cookie)
+    # -> Nếu dính 1 trong 2 là chặn ngay
+    
+    # Chuyển đổi sang string để so sánh chính xác
+    df['ip_address'] = df['ip_address'].astype(str)
+    df['user_uuid'] = df['user_uuid'].astype(str)
+    
+    mask = (df['ip_address'] == str(ip)) | (df['user_uuid'] == str(user_uuid))
+    user_rows = df[mask]
+    
+    if not user_rows.empty:
+        row = user_rows.iloc[0]
+        return row.get('name', 'Bạn'), row['reward'], row['time']
     return None
 
-def save_play_history(ip, name, reward):
+def save_play_history(ip, user_uuid, name, reward):
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         df = conn.read(worksheet="Logs", ttl=0)
         new_row = pd.DataFrame([{
-            "ip_address": ip,
+            "ip_address": str(ip),
+            "user_uuid": str(user_uuid),
             "name": name,
             "reward": reward,
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -63,10 +85,10 @@ def save_play_history(ip, name, reward):
         conn.update(worksheet="Logs", data=updated_df)
         return True
     except Exception as e:
-        st.error(f"Lỗi hệ thống: {e}")
+        st.error(f"Lỗi: {e}")
         return False
 
-# --- CSS GIAO DIỆN ---
+# --- CSS ---
 st.markdown("""
     <style>
     .stApp {
@@ -77,13 +99,12 @@ st.markdown("""
     h1, h2, h3 { color: #FFD700 !important; text-align: center; }
     .stTextInput > div > div > input {
         text-align: center; font-size: 18px; color: #8B0000;
-        background-color: #FFF8DC; border: 2px solid #FFD700; border-radius: 10px;
+        background-color: #FFF8DC; border: 2px solid #FFD700;
     }
     .stButton>button {
         display: block; margin: 0 auto; background-color: #FFD700; color: #8B0000;
         font-size: 24px; font-weight: bold; border-radius: 50px; padding: 15px 30px;
         border: 2px solid #FF4500;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.4);
     }
     .status-box {
         background-color: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px;
@@ -95,14 +116,22 @@ st.markdown("""
 # --- LOGIC CHÍNH ---
 st.title("🐯 LẮC LÌ XÌ ONLINE 🐯")
 
+# 1. Lấy Cookies (UUID)
+# Streamlit Cookie Manager cần thời gian để load, nếu chưa có thì tạo mới
+user_uuid = cookie_manager.get(cookie="device_id")
+if not user_uuid:
+    user_uuid = str(uuid.uuid4())
+    # Lưu cookie 30 ngày
+    cookie_manager.set("device_id", user_uuid, expires_at=datetime.now().replace(year=datetime.now().year + 1))
+
+# 2. Lấy IP
 user_ip = get_remote_ip()
 
-# Load dữ liệu
-with st.spinner("Đang tải dữ liệu..."):
+# 3. Load Data & Kiểm tra
+with st.spinner("Đang kiểm tra danh sách trúng thưởng..."):
     df_history = get_data()
 
-# Kiểm tra lịch sử
-history = check_ip_played(user_ip, df_history)
+history = check_user_played(user_ip, user_uuid, df_history)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
@@ -111,9 +140,13 @@ with col2:
 st.write("")
 
 if history:
-    # --- ĐÃ CHƠI ---
+    # --- ĐÃ CHƠI (PHÁT HIỆN QUA IP HOẶC COOKIE) ---
     user_name_old, reward_received, time_played = history
     st.warning(f"⛔ {str(user_name_old).upper()} ĐÃ NHẬN QUÀ RỒI!")
+    
+    # Hiển thị lý do bị chặn (chỉ hiện khi debug, tắt đi khi chạy thật nếu muốn)
+    # st.caption(f"Debug: Phát hiện trùng khớp thiết bị (ID: {user_uuid[:5]}...) hoặc IP.")
+    
     st.markdown(f"""
         <div class="status-box">
             <h3>Phần quà của bạn:</h3>
@@ -124,20 +157,21 @@ if history:
 
 else:
     # --- CHƯA CHƠI ---
-    name_input = st.text_input("Nhập tên của bạn để nhận lộc:", placeholder="Ví dụ: Tuấn Anh", max_chars=30)
+    name_input = st.text_input("Nhập tên của bạn:", placeholder="Ví dụ: Tuấn Anh")
     st.write("")
 
     if st.button("🧧 LẮC NGAY 🧧"):
         if not name_input.strip():
-            st.error("⚠️ Vui lòng nhập tên trước khi lắc!")
+            st.error("⚠️ Vui lòng nhập tên!")
         elif user_ip == "unknown_ip":
-            st.error("⚠️ Vui lòng tắt VPN/Proxy để tham gia.")
+            st.error("⚠️ Không thể xác định mạng. Tắt VPN thử xem?")
         else:
-            with st.spinner(f'{name_input} đang lắc quẻ...'):
+            with st.spinner(f'{name_input} đang lắc...'):
                 time.sleep(2) 
                 final_reward = random.choice(REWARDS)
                 
-                if save_play_history(user_ip, name_input, final_reward):
+                # Ghi cả IP và UUID vào sheet
+                if save_play_history(user_ip, user_uuid, name_input, final_reward):
                     st.balloons()
                     st.success(f"Chúc mừng {name_input}!")
                     st.markdown(f"""

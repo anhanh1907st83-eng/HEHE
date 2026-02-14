@@ -1,53 +1,28 @@
 import streamlit as st
-import random
+import pandas as pd
 import time
-import sqlite3
-import socket
+import random
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 from streamlit.web.server.websocket_headers import _get_websocket_headers
 
-# --- CẤU HÌNH DATABASE (SQLite) ---
-# Lưu ý: Trên Streamlit Cloud miễn phí, file này sẽ bị reset khi App reboot/deploy lại.
-# Để chạy sự kiện thật, Tuấn Anh nên đổi sang kết nối Google Sheets hoặc Supabase.
-DB_FILE = "lucky_shaker.db"
+# --- CẤU HÌNH ---
+st.set_page_config(page_title="Lắc Lì Xì - Tết 2026", page_icon="🧧", layout="centered")
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS history
-                 (ip_address TEXT PRIMARY KEY, 
-                  reward TEXT, 
-                  time TIMESTAMP)''')
-    conn.commit()
-    conn.close()
+REWARDS = [
+    "🧧 Giftcode: VIP-TET-2026", 
+    "🍀 Lời chúc: Tấn Tài Tấn Lộc",
+    "💰 Lì xì: 50.000 VNĐ", 
+    "👘 Áo Dài Tết (7 ngày)",
+    "🌸 Cành Đào Tiên", 
+    "✨ Chúc bạn may mắn lần sau!"
+]
 
-def check_ip_played(ip):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT reward, time FROM history WHERE ip_address = ?", (ip,))
-    result = c.fetchone()
-    conn.close()
-    return result
-
-def save_play_history(ip, reward):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO history (ip_address, reward, time) VALUES (?, ?, ?)", 
-                  (ip, reward, datetime.now()))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False # Đã tồn tại
-    finally:
-        conn.close()
-
-# --- HÀM LẤY IP (Hỗ trợ Streamlit Cloud) ---
+# --- HÀM LẤY IP ---
 def get_remote_ip():
     try:
         headers = _get_websocket_headers()
         if headers:
-            # Ưu tiên lấy X-Forwarded-For (dùng cho Proxy/Cloud)
             x_forwarded = headers.get("X-Forwarded-For")
             if x_forwarded:
                 return x_forwarded.split(",")[0].strip()
@@ -56,9 +31,47 @@ def get_remote_ip():
         pass
     return "unknown_ip"
 
-# --- KHỞI TẠO APP ---
-st.set_page_config(page_title="🐎 TẾT BÍNG NGỌ - LẮC DÌ DỌ 🐎", page_icon="🧧", layout="centered")
-init_db()
+# --- HÀM XỬ LÝ GOOGLE SHEETS ---
+def get_data():
+    # Tạo kết nối
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Đọc dữ liệu, ttl=0 nghĩa là không cache, luôn lấy mới nhất
+    try:
+        df = conn.read(worksheet="Logs", ttl=0)
+        return df
+    except Exception:
+        # Nếu sheet trắng chưa có header, tạo dataframe rỗng
+        return pd.DataFrame(columns=["ip_address", "reward", "time"])
+
+def check_ip_played(ip, df):
+    # Kiểm tra xem IP đã tồn tại trong cột ip_address chưa
+    if ip in df['ip_address'].values:
+        user_row = df[df['ip_address'] == ip].iloc[0]
+        return user_row['reward'], user_row['time']
+    return None
+
+def save_play_history(ip, reward):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        # 1. Lấy dữ liệu hiện tại
+        df = conn.read(worksheet="Logs", ttl=0)
+        
+        # 2. Tạo dòng mới
+        new_row = pd.DataFrame([{
+            "ip_address": ip,
+            "reward": reward,
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }])
+        
+        # 3. Gộp và Ghi đè lại vào Sheet
+        # Lưu ý: Với lượng truy cập lớn cùng lúc, cách này có thể bị race condition nhẹ
+        # nhưng với quy mô nhỏ thì ổn.
+        updated_df = pd.concat([df, new_row], ignore_index=True)
+        conn.update(worksheet="Logs", data=updated_df)
+        return True
+    except Exception as e:
+        st.error(f"Lỗi lưu dữ liệu: {e}")
+        return False
 
 # --- CSS GIAO DIỆN ---
 st.markdown("""
@@ -82,28 +95,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- LOGIC CHÍNH ---
-st.title("🐎 TẾT BÍNG NGỌ - LẮC DÌ DỌ 🐎")
+st.title("🐯 LẮC LÌ XÌ ONLINE 🐯")
 
-# 1. Lấy IP người dùng
 user_ip = get_remote_ip()
 
-# Debug: Hiển thị IP (Tắt dòng này khi chạy thật để bảo mật)
-# st.caption(f"Debug IP: {user_ip}") 
+# Load dữ liệu từ Google Sheet
+with st.spinner("Đang tải dữ liệu..."):
+    df_history = get_data()
 
-# 2. Kiểm tra lịch sử
-played_data = check_ip_played(user_ip)
-
-REWARDS = [
-    "🧧 Phong bao lì xì thật: Ngẫu nhiên",
-    "🍀 Lời chúc: Tấn Tài Tấn Lộc",
-    "💰 Lì xì +bank: 50.000 VNĐ",
-    "💰 Lì xì +bank: 100.000 VNĐ",
-    "💰 Lì xì +bank: 10.000 VNĐ",
-    "💰 Lì xì +bank: 20.000 VNĐ",
-    "💰 Lì xì +bank: 200.000 VNĐ",
-    "🌸 Vật phẩm: Linh vật Ngựa trị giá 69k",
-    "✨ Chúc bạn may mắn lần sau!"
-]
+# Kiểm tra lịch sử
+history = check_ip_played(user_ip, df_history)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
@@ -111,35 +112,31 @@ with col2:
 
 st.write("")
 
-# 3. Điều hướng hiển thị
-if played_data:
-    # --- TRƯỜNG HỢP ĐÃ CHƠI ---
-    reward_received, time_played = played_data
-    st.warning("⛔ BẠN ĐÃ NHẬN QUÀ RỒI!")
+if history:
+    # --- ĐÃ CHƠI ---
+    reward_received, time_played = history
+    st.warning("⛔ THIẾT BỊ NÀY ĐÃ NHẬN QUÀ!")
     st.markdown(f"""
         <div class="status-box">
             <h3>Phần quà của bạn:</h3>
             <h2 style="color: #00FF00;">{reward_received}</h2>
-            <p style="color: #DDD; font-size: 12px;">Đã nhận lúc: {time_played}</p>
-            <p>Chỉ được nhận 1 lần.</p>
+            <p style="color: #DDD; font-size: 12px;">Đã nhận: {time_played}</p>
         </div>
     """, unsafe_allow_html=True)
 
 else:
-    # --- TRƯỜNG HỢP CHƯA CHƠI ---
+    # --- CHƯA CHƠI ---
     if st.button("🧧 LẮC NGAY 🧧"):
         if user_ip == "unknown_ip":
-            st.error("Không xác định được danh tính. Vui lòng tắt VPN/Proxy.")
+            st.error("Vui lòng tắt VPN/Proxy để tham gia.")
         else:
-            with st.spinner('Đang lắc lì xì...'):
-                time.sleep(1.5)
-                # Random quà
+            with st.spinner('Đang kết nối thần tài...'):
+                time.sleep(2) # Hiệu ứng hồi hộp
+                
                 final_reward = random.choice(REWARDS)
                 
-                # Lưu vào DB
-                saved = save_play_history(user_ip, final_reward)
-                
-                if saved:
+                # Lưu vào Google Sheet
+                if save_play_history(user_ip, final_reward):
                     st.balloons()
                     st.success("Chúc mừng!")
                     st.markdown(f"""
@@ -147,7 +144,5 @@ else:
                             <h2 style="color: #FFD700;">{final_reward}</h2>
                         </div>
                     """, unsafe_allow_html=True)
-                    time.sleep(1)
-                    st.rerun() # Load lại trang để khóa nút
-                else:
-                    st.error("Có lỗi xảy ra hoặc bạn đã chơi rồi!")
+                    time.sleep(2)
+                    st.rerun()

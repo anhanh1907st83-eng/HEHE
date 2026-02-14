@@ -4,7 +4,6 @@ import time
 import random
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
-from streamlit.web.server.websocket_headers import _get_websocket_headers
 
 # --- CẤU HÌNH ---
 st.set_page_config(page_title="Lắc Lì Xì - Tết 2026", page_icon="🧧", layout="centered")
@@ -19,15 +18,16 @@ REWARDS = [
     "✨ Chúc bạn may mắn lần sau!"
 ]
 
-# --- HÀM LẤY IP ---
+# --- HÀM LẤY IP (CHUẨN MỚI) ---
 def get_remote_ip():
     try:
-        headers = _get_websocket_headers()
-        if headers:
-            x_forwarded = headers.get("X-Forwarded-For")
+        # Sử dụng st.context.headers thay vì _get_websocket_headers
+        if st.context.headers:
+            # Lấy X-Forwarded-For nếu chạy trên Cloud/Proxy
+            x_forwarded = st.context.headers.get("X-Forwarded-For")
             if x_forwarded:
                 return x_forwarded.split(",")[0].strip()
-            return headers.get("Remote-Addr")
+            return st.context.headers.get("Remote-Addr")
     except Exception:
         pass
     return "unknown_ip"
@@ -37,35 +37,28 @@ def get_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         df = conn.read(worksheet="Logs", ttl=0)
-        # Đảm bảo có cột 'name' nếu sheet cũ chưa có
         if 'name' not in df.columns:
             df['name'] = ""
         return df
     except Exception:
-        # Tạo khung dữ liệu mới nếu sheet rỗng
         return pd.DataFrame(columns=["ip_address", "name", "reward", "time"])
 
 def check_ip_played(ip, df):
-    # Kiểm tra xem IP đã tồn tại chưa
     if ip in df['ip_address'].values:
         user_row = df[df['ip_address'] == ip].iloc[0]
-        # Trả về: Tên, Phần quà, Thời gian
         return user_row.get('name', 'Bạn'), user_row['reward'], user_row['time']
     return None
 
 def save_play_history(ip, name, reward):
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        # Đọc dữ liệu mới nhất để tránh ghi đè sai
         df = conn.read(worksheet="Logs", ttl=0)
-        
         new_row = pd.DataFrame([{
             "ip_address": ip,
-            "name": name,  # Lưu tên người dùng
+            "name": name,
             "reward": reward,
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }])
-        
         updated_df = pd.concat([df, new_row], ignore_index=True)
         conn.update(worksheet="Logs", data=updated_df)
         return True
@@ -82,14 +75,9 @@ st.markdown("""
         color: #FFD700;
     }
     h1, h2, h3 { color: #FFD700 !important; text-align: center; }
-    /* Style cho ô nhập tên */
     .stTextInput > div > div > input {
-        text-align: center;
-        font-size: 18px;
-        color: #8B0000;
-        background-color: #FFF8DC;
-        border: 2px solid #FFD700;
-        border-radius: 10px;
+        text-align: center; font-size: 18px; color: #8B0000;
+        background-color: #FFF8DC; border: 2px solid #FFD700; border-radius: 10px;
     }
     .stButton>button {
         display: block; margin: 0 auto; background-color: #FFD700; color: #8B0000;
@@ -125,7 +113,7 @@ st.write("")
 if history:
     # --- ĐÃ CHƠI ---
     user_name_old, reward_received, time_played = history
-    st.warning(f"⛔ {user_name_old.upper()} ĐÃ NHẬN QUÀ RỒI!")
+    st.warning(f"⛔ {str(user_name_old).upper()} ĐÃ NHẬN QUÀ RỒI!")
     st.markdown(f"""
         <div class="status-box">
             <h3>Phần quà của bạn:</h3>
@@ -136,14 +124,10 @@ if history:
 
 else:
     # --- CHƯA CHƠI ---
-    # 1. Nhập tên
     name_input = st.text_input("Nhập tên của bạn để nhận lộc:", placeholder="Ví dụ: Tuấn Anh", max_chars=30)
-    
-    st.write("") # Khoảng cách
+    st.write("")
 
-    # 2. Nút lắc
     if st.button("🧧 LẮC NGAY 🧧"):
-        # Validate tên
         if not name_input.strip():
             st.error("⚠️ Vui lòng nhập tên trước khi lắc!")
         elif user_ip == "unknown_ip":
@@ -151,10 +135,8 @@ else:
         else:
             with st.spinner(f'{name_input} đang lắc quẻ...'):
                 time.sleep(2) 
-                
                 final_reward = random.choice(REWARDS)
                 
-                # Lưu vào Google Sheet kèm tên
                 if save_play_history(user_ip, name_input, final_reward):
                     st.balloons()
                     st.success(f"Chúc mừng {name_input}!")

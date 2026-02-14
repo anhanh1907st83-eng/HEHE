@@ -1,25 +1,66 @@
 import streamlit as st
 import random
 import time
+import sqlite3
+import socket
+from datetime import datetime
+from streamlit.web.server.websocket_headers import _get_websocket_headers
 
-# --- Cấu hình trang ---
-st.set_page_config(
-    page_title="Lắc Lì Xì Nghịch Thủy Hàn",
-    page_icon="🧧",
-    layout="centered"
-)
+# --- CẤU HÌNH DATABASE (SQLite) ---
+# Lưu ý: Trên Streamlit Cloud miễn phí, file này sẽ bị reset khi App reboot/deploy lại.
+# Để chạy sự kiện thật, Tuấn Anh nên đổi sang kết nối Google Sheets hoặc Supabase.
+DB_FILE = "lucky_shaker.db"
 
-# --- Danh sách phần thưởng (Giả lập database) ---
-REWARDS = [
-    "🧧 Giftcode: VIP-TET-2025",
-    "🍀 Lời chúc: Tấn Tài Tấn Lộc",
-    "💰 Lì xì: 50.000 VNĐ",
-    "👘 Trang phục: Áo Dài Tết (7 ngày)",
-    "🌸 Vật phẩm: Cành Đào Tiên",
-    "✨ Chúc bạn may mắn lần sau!"
-]
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS history
+                 (ip_address TEXT PRIMARY KEY, 
+                  reward TEXT, 
+                  time TIMESTAMP)''')
+    conn.commit()
+    conn.close()
 
-# --- CSS tùy chỉnh giao diện (Theme Tết) ---
+def check_ip_played(ip):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT reward, time FROM history WHERE ip_address = ?", (ip,))
+    result = c.fetchone()
+    conn.close()
+    return result
+
+def save_play_history(ip, reward):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO history (ip_address, reward, time) VALUES (?, ?, ?)", 
+                  (ip, reward, datetime.now()))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False # Đã tồn tại
+    finally:
+        conn.close()
+
+# --- HÀM LẤY IP (Hỗ trợ Streamlit Cloud) ---
+def get_remote_ip():
+    try:
+        headers = _get_websocket_headers()
+        if headers:
+            # Ưu tiên lấy X-Forwarded-For (dùng cho Proxy/Cloud)
+            x_forwarded = headers.get("X-Forwarded-For")
+            if x_forwarded:
+                return x_forwarded.split(",")[0].strip()
+            return headers.get("Remote-Addr")
+    except Exception:
+        pass
+    return "unknown_ip"
+
+# --- KHỞI TẠO APP ---
+st.set_page_config(page_title="🐎 TẾT BÍNG NGỌ - LẮC DÌ DỌ 🐎", page_icon="🧧", layout="centered")
+init_db()
+
+# --- CSS GIAO DIỆN ---
 st.markdown("""
     <style>
     .stApp {
@@ -27,85 +68,86 @@ st.markdown("""
         background-image: linear-gradient(180deg, #8B0000 0%, #B22222 100%);
         color: #FFD700;
     }
-    h1 {
-        color: #FFD700 !important;
-        text-align: center;
-        font-family: 'Arial', sans-serif;
-        text-shadow: 2px 2px 4px #000000;
-    }
+    h1, h2, h3 { color: #FFD700 !important; text-align: center; }
     .stButton>button {
-        display: block;
-        margin: 0 auto;
-        background-color: #FFD700;
-        color: #8B0000;
-        font-size: 24px;
-        font-weight: bold;
-        border-radius: 50px;
-        padding: 15px 30px;
+        display: block; margin: 0 auto; background-color: #FFD700; color: #8B0000;
+        font-size: 24px; font-weight: bold; border-radius: 50px; padding: 15px 30px;
         border: 2px solid #FF4500;
-        box-shadow: 0px 4px 6px rgba(0,0,0,0.3);
-        transition: transform 0.1s;
     }
-    .stButton>button:active {
-        transform: scale(0.95);
-        background-color: #FFC125;
-    }
-    .reward-box {
-        background-color: rgba(0, 0, 0, 0.5);
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        margin-top: 20px;
-        border: 2px solid #FFD700;
+    .status-box {
+        background-color: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px;
+        text-align: center; border: 1px solid #FFD700; margin-top: 20px;
     }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- Header ---
-st.title("🐯 LẮC LÌ XÌ - NGHỊCH THỦY HÀN 🐯")
-st.markdown("<p style='text-align: center; color: #FFF;'>Chào mừng Đại Hiệp! Hãy lắc quẻ cầu may đầu năm.</p>", unsafe_allow_html=True)
+# --- LOGIC CHÍNH ---
+st.title("🐎 TẾT BÍNG NGỌ - LẮC DÌ DỌ 🐎")
 
-# --- Hình ảnh minh họa (Placeholder) ---
-# Bạn có thể thay link này bằng hình ảnh cái cây hoặc bao lì xì
+# 1. Lấy IP người dùng
+user_ip = get_remote_ip()
+
+# Debug: Hiển thị IP (Tắt dòng này khi chạy thật để bảo mật)
+# st.caption(f"Debug IP: {user_ip}") 
+
+# 2. Kiểm tra lịch sử
+played_data = check_ip_played(user_ip)
+
+REWARDS = [
+    "🧧 Phong bao lì xì thật: Ngẫu nhiên",
+    "🍀 Lời chúc: Tấn Tài Tấn Lộc",
+    "💰 Lì xì +bank: 50.000 VNĐ",
+    "💰 Lì xì +bank: 100.000 VNĐ",
+    "💰 Lì xì +bank: 10.000 VNĐ",
+    "💰 Lì xì +bank: 20.000 VNĐ",
+    "💰 Lì xì +bank: 200.000 VNĐ",
+    "🌸 Vật phẩm: Linh vật Ngựa trị giá 69k",
+    "✨ Chúc bạn may mắn lần sau!"
+]
+
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     st.image("https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjR4Zmx4Zmx4Zmx4Zmx4Zmx4Zmx4Zmx4Zmx4Zmx4ZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/LpDmM2wSt6kCM/giphy.gif", width=300)
 
-# --- Logic Lắc Lì Xì ---
-# Sử dụng session_state để lưu trạng thái đã lắc hay chưa
-if 'shaken' not in st.session_state:
-    st.session_state.shaken = False
-if 'reward' not in st.session_state:
-    st.session_state.reward = ""
-
-# Khoảng trống để căn giữa nút
-st.write("")
 st.write("")
 
-# Nút Lắc
-col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-with col_btn2:
-    if st.button("🧧 LẮC NGAY 🧧"):
-        with st.spinner('Đang lắc...'):
-            time.sleep(1.5) # Giả lập thời gian lắc
-            st.session_state.reward = random.choice(REWARDS)
-            st.session_state.shaken = True
-
-# Hiển thị kết quả
-if st.session_state.shaken:
-    st.balloons() # Hiệu ứng bóng bay/pháo hoa
+# 3. Điều hướng hiển thị
+if played_data:
+    # --- TRƯỜNG HỢP ĐÃ CHƠI ---
+    reward_received, time_played = played_data
+    st.warning("⛔ BẠN ĐÃ NHẬN QUÀ RỒI!")
     st.markdown(f"""
-        <div class="reward-box">
-            <h2 style="color: #FFD700;">CHÚC MỪNG!</h2>
-            <h3 style="color: #FFF;">{st.session_state.reward}</h3>
+        <div class="status-box">
+            <h3>Phần quà của bạn:</h3>
+            <h2 style="color: #00FF00;">{reward_received}</h2>
+            <p style="color: #DDD; font-size: 12px;">Đã nhận lúc: {time_played}</p>
+            <p>Chỉ được nhận 1 lần.</p>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Nút Reset
-    if st.button("Lắc tiếp"):
-        st.session_state.shaken = False
-        st.rerun()
 
-# --- Footer ---
-st.markdown("---")
-st.markdown("<p style='text-align: center; font-size: 12px; color: #EEE;'>© 2026 Clone Event by Tuấn Anh</p>", unsafe_allow_html=True)
+else:
+    # --- TRƯỜNG HỢP CHƯA CHƠI ---
+    if st.button("🧧 LẮC NGAY 🧧"):
+        if user_ip == "unknown_ip":
+            st.error("Không xác định được danh tính. Vui lòng tắt VPN/Proxy.")
+        else:
+            with st.spinner('Đang lắc lì xì...'):
+                time.sleep(1.5)
+                # Random quà
+                final_reward = random.choice(REWARDS)
+                
+                # Lưu vào DB
+                saved = save_play_history(user_ip, final_reward)
+                
+                if saved:
+                    st.balloons()
+                    st.success("Chúc mừng!")
+                    st.markdown(f"""
+                        <div class="status-box">
+                            <h2 style="color: #FFD700;">{final_reward}</h2>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    time.sleep(1)
+                    st.rerun() # Load lại trang để khóa nút
+                else:
+                    st.error("Có lỗi xảy ra hoặc bạn đã chơi rồi!")
